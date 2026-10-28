@@ -11,7 +11,7 @@ self.addEventListener("activate", e => {
 self.addEventListener("fetch", e => {
   const r = e.request; if(r.method !== "GET") return;
   const url = new URL(r.url);
-  if(/\/api\.php$/.test(url.pathname)) return;          // exercise results always go straight to the hosting
+  if(/\/(api\.php|config\.json)$/.test(url.pathname)) return;          // exercise results always go straight to the hosting
   const page = r.mode === "navigate" || (url.origin === location.origin && /(\/|\.html)$/.test(url.pathname));
   if(page){
     // network first: new content uploaded to the hosting shows up right away

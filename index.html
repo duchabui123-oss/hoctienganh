@@ -1,4 +1,3 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style><title>Tiếng Anh không khó</title><meta name="robots" content="noindex,nofollow"><meta name="description" content="Trang học tiếng Anh của gia đình"><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%232747C9'/%3E%3Crect x='42' y='42' width='20' height='20' rx='6' fill='%23FFE356'/%3E%3Ctext x='30' y='42' font-family='Arial' font-weight='700' font-size='28' fill='white' text-anchor='middle'%3EAa%3C/text%3E%3C/svg%3E"><link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#2747C9"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="apple-mobile-web-app-title" content="Tiếng Anh"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&amp;family=Be+Vietnam+Pro:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@500;700&amp;display=swap"><style id="site-css">/* Layout: notebook app — sticky top bar, tree sidebar on the left, one reading column; highlighter motif marks formulas and headings */
 :root{
   --bg:#F3F6FB; --surface:#FFFFFF; --surface-2:#EAF0FA; --ink:#17203A; --muted:#58637F; --line:#D9E0EE;
@@ -2134,13 +2133,13 @@ const pctOf = r => r.n ? Math.round(r.ok * 100 / r.n) : 0;
 function bestOf(id){ const r = myRes().filter(x => x.id === id); if(!r.length) return null; return {best: Math.max(...r.map(pctOf)), times: r.length, last: r[r.length - 1]}; }
 function saveStudents(){ store.set(QZ_STU, students); store.set(QZ_CUR, student); }
 /* ----- server storage: api.php next to index.html on the hosting ----- */
-const QQ_KEY = "tanm-quiz-queue-v1", API = "api.php";
+const QQ_KEY = "tanm-quiz-queue-v1"; let API = "api.php";
 const SRV = { on: false, checked: false, queue: store.get(QQ_KEY, []), names: [] };
 let adminPw = "";
 async function api(a, body, qs){
-  const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 10000);
+  const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 25000);
   try{
-    const r = body ? await fetch(API, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(Object.assign({a}, body)), signal: ctl.signal, cache: "no-store"})
+    const r = body ? await fetch(API, {method: "POST", headers: {"Content-Type": "text/plain;charset=utf-8"}, body: JSON.stringify(Object.assign({a}, body)), signal: ctl.signal, cache: "no-store"})
                    : await fetch(API + "?a=" + a + (qs || ""), {cache: "no-store", signal: ctl.signal});
     const j = await r.json().catch(() => null);
     if(!j) throw new Error("Máy chủ không phản hồi đúng.");
@@ -2150,6 +2149,8 @@ async function api(a, body, qs){
 }
 async function srvInit(){
   if(!STANDALONE || !/^https?:$/.test(location.protocol)){ SRV.checked = true; return; }
+  try{ const c = await fetch("config.json", {cache: "no-store"}).then(r => r.ok ? r.json() : null).catch(() => null);
+    if(c && typeof c.api === "string" && /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(c.api.trim())) API = c.api.trim(); }catch(e){}
   try{ const j = await api("ping"); SRV.on = !!j.ok; }catch(e){ SRV.on = false; }
   SRV.checked = true;
   if(!SRV.on){ SRV.queue = []; store.del(QQ_KEY); return; }
@@ -2546,7 +2547,7 @@ function resultsAdmin(){
   const needPw = SRV.on && !ui.resData;
   if(STANDALONE && !SRV.checked) return `<div class="card panel"><div class="empty">Đang kết nối tới hosting…</div></div>`;
   if(needPw) return `<div class="card panel res-login"><h2 class="sub-h" style="margin-top:0">Kết quả làm bài của các cháu</h2>
-    <p class="help">Kết quả được lưu trên hosting (file <b>api.php</b>). Nhập lại mật khẩu quản trị để xem.</p>
+    <p class="help">Kết quả được lưu trên hosting (Google Sheets hoặc api.php). Nhập lại mật khẩu quản trị để xem.</p>
     <form id="res-pw" class="addrow"><input class="inp" id="res-pw-in" type="password" autocomplete="current-password" placeholder="Mật khẩu quản trị" value="${esc(adminPw)}"><button class="btn btn-p" type="submit">Xem kết quả</button></form>
     ${ui.resErr ? `<p class="err">${esc(ui.resErr)}</p>` : ""}</div>`;
   const D0 = resRows(), all = D0.results;
@@ -2606,4 +2607,3 @@ document.addEventListener("keydown", e => { if(e.key === "Escape"){ if(trUI.open
 render();
 })();
 </script></body></html>
-</body></html>
