@@ -833,7 +833,10 @@ textarea.inp{height:auto;padding:10px 12px;font-family:var(--f-mono);font-size:1
 .foot-note{font-size:.85rem;opacity:.85}
 @media print{.foot{display:none}}
 
-.qz-lock p{display:flex;gap:8px;align-items:flex-start;margin:6px 0 0}
+.qz-lock-b{display:flex;gap:12px;align-items:center;margin-top:10px}
+.qz-lock-b p{margin:0;line-height:1.55}
+.qz-lock-i{flex:none;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:#e8eefc;color:#2547c9}
+.qz-lock-i svg{width:22px;height:22px}
 .qz-adm{margin:0 0 22px;border:2px dashed var(--line,#cbd5e1);border-radius:14px;padding:12px}
 .qz-adm-t{font-size:.78rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;opacity:.7;margin:0 0 8px}
 .qz-adm .panel{box-shadow:none;margin-bottom:12px}
@@ -2219,6 +2222,8 @@ const qzPref = Object.assign({n: 10, lim: 0}, store.get(QZ_PREF, {}));
 const QZ_OWN = "tanm-quiz-own-v1";
 let own = store.get(QZ_OWN, null);
 if(!Array.isArray(own)){ own = Object.keys(results).filter(k => (results[k] || []).length); if(student && !own.includes(student)) own.push(student); store.set(QZ_OWN, own); }
+const QZ_PIN = "tanm-quiz-pin-v1"; let pins = store.get(QZ_PIN, {});
+const setPinLocal = (n, p) => { pins[n] = p; store.set(QZ_PIN, pins); };
 const isOwn = n => !!n && own.includes(n);
 const markOwn = n => { if(n && !own.includes(n)){ own.push(n); store.set(QZ_OWN, own); } };
 const isAdm = () => !!(cap.admin && (authed() || (!STANDALONE && !authRec())));
@@ -2228,7 +2233,7 @@ function bestOf(id){ const r = myRes().filter(x => x.id === id); if(!r.length) r
 function saveStudents(){ store.set(QZ_STU, students); store.set(QZ_CUR, student); }
 /* ----- server storage: api.php next to index.html on the hosting ----- */
 const QQ_KEY = "tanm-quiz-queue-v1"; let API = "api.php";
-const SRV = { on: false, checked: false, queue: store.get(QQ_KEY, []), names: [] };
+const SRV = { on: false, pin: false, checked: false, queue: store.get(QQ_KEY, []), names: [] };
 let adminPw = "";
 async function api(a, body, qs){
   const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 25000);
@@ -2245,7 +2250,7 @@ async function srvInit(){
   if(!STANDALONE || !/^https?:$/.test(location.protocol)){ SRV.checked = true; return; }
   try{ const c = await fetch("config.json", {cache: "no-store"}).then(r => r.ok ? r.json() : null).catch(() => null);
     if(c && typeof c.api === "string" && /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(c.api.trim())) API = c.api.trim(); }catch(e){}
-  try{ const j = await api("ping"); SRV.on = !!j.ok; }catch(e){ SRV.on = false; }
+  try{ const j = await api("ping"); SRV.on = !!j.ok; SRV.pin = !!(j.ok && j.pin); }catch(e){ SRV.on = false; }
   SRV.checked = true;
   if(!SRV.on){ SRV.queue = []; store.del(QQ_KEY); return; }
   await flushQueue();
@@ -2256,7 +2261,7 @@ async function srvInit(){
 function quizRefresh(){ const r = route(); if(ui.mode === "read" && (r === "bai-tap" || (r.startsWith("bai-tap/") && r !== "bai-tap/lam"))) render(); if(ui.mode === "admin" && ui.tab === "res") render(); }
 async function pullMine(){
   if(!SRV.on || !student || !isOwn(student)) return;
-  try{ const j = await api("mine", null, "&student=" + encodeURIComponent(student)); const s = student;
+  try{ const j = pins[student] ? await api("mine", {student, pin: pins[student]}) : await api("mine", null, "&student=" + encodeURIComponent(student)); const s = student;
     const seen = new Set(j.results.map(r => r.uid).filter(Boolean)); const pend = SRV.queue.filter(x => x.student === s).map(x => x.rec).filter(r => !seen.has(r.uid));
     results[s] = j.results.concat(pend); store.set(QZ_RES, results); }catch(e){}
 }
@@ -2264,15 +2269,34 @@ let flushing = false;
 async function flushQueue(){
   if(!SRV.on || flushing || !SRV.queue.length) return; flushing = true;
   try{ const by = {}; for(const x of SRV.queue) (by[x.student] = by[x.student] || []).push(x.rec);
-    for(const [s, recs] of Object.entries(by)){ try{ await api("save", {student: s, recs}); const ids = new Set(recs.map(r => r.uid)); SRV.queue = SRV.queue.filter(x => !(x.student === s && ids.has(x.rec.uid))); store.set(QQ_KEY, SRV.queue); }catch(e){ if(!e.server) break; } }
+    for(const [s, recs] of Object.entries(by)){ try{ await api("save", {student: s, recs, pin: pins[s]}); const ids = new Set(recs.map(r => r.uid)); SRV.queue = SRV.queue.filter(x => !(x.student === s && ids.has(x.rec.uid))); store.set(QQ_KEY, SRV.queue); }catch(e){ if(!e.server) break; } }
   } finally { flushing = false; }
 }
 window.addEventListener("online", () => flushQueue());
 setTimeout(srvInit, 300);
 
+const validPin = v => /^\d{4}$/.test(String(v || "").trim());
+/* đăng nhập / tạo tên bằng PIN trên hosting: lấy lại kết quả ở bất kỳ trình duyệt nào */
+async function srvLogin(name, pin){
+  try{ const j = await api("login", {student: name, pin}); setPinLocal(name, pin); markOwn(name);
+    const seen = new Set((j.results || []).map(r => r.uid).filter(Boolean)); const loc = (results[name] || []).filter(r => !r.uid || !seen.has(r.uid));
+    results[name] = (j.results || []).concat(loc); store.set(QZ_RES, results);
+    if(!students.includes(name)) students.push(name);
+    return j; }
+  catch(e){ toast(e.message || "Chưa kết nối được máy chủ."); return null; }
+}
+async function unlockName(name){
+  const own = isOwn(name);
+  const v = await dialog({title: own ? `Đặt mã PIN cho ${name}` : `Nhập mã PIN của ${name}`, text: own ? "PIN 4 số giúp bạn xem lại kết quả ở máy hoặc trình duyệt khác. Hãy nhớ mã này nhé." : "Nhập mã PIN 4 số bạn đã đặt khi tạo tên này.", fields: [{label: "Mã PIN (4 chữ số)", type: "password", ph: "••••"}], ok: own ? "Đặt PIN" : "Xem kết quả"});
+  if(!v) return false; const pin = v[0].trim(); if(!validPin(pin)){ toast("Mã PIN gồm đúng 4 chữ số."); return false; }
+  const j = await srvLogin(name, pin); if(!j) return false; saveStudents(); toast(j.created ? "Đã đặt mã PIN." : "Đã mở kết quả của " + name + "."); return true;
+}
 async function addStudent(){
-  const v = await dialog({title: "Thêm tên học sinh", text: "Mỗi cháu một tên để thống kê kết quả riêng.", fields: [{label: "Tên", ph: "Ví dụ: Bin, Na, Minh Anh"}], ok: "Thêm"});
+  const pinOn = SRV.on && SRV.pin;
+  const v = await dialog({title: "Thêm tên học sinh", text: pinOn ? "Mỗi cháu một tên và một mã PIN 4 số. Có PIN, cháu xem lại được kết quả ở máy hay trình duyệt khác. Tên đã có thì nhập đúng PIN để vào lại." : "Mỗi cháu một tên để thống kê kết quả riêng.", fields: [{label: "Tên", ph: "Ví dụ: Bin, Na, Minh Anh"}].concat(pinOn ? [{label: "Mã PIN (4 chữ số)", type: "password", ph: "••••"}] : []), ok: "Thêm"});
   if(!v) return false; const name = v[0].trim().slice(0, 24); if(!name) return false;
+  if(pinOn){ const pin = (v[1] || "").trim(); if(!validPin(pin)){ toast("Mã PIN gồm đúng 4 chữ số."); return false; }
+    const j = await srvLogin(name, pin); if(!j) return false; student = name; saveStudents(); return true; }
   if(!students.includes(name)) students.push(name); student = name; markOwn(name); saveStudents();
   if(SRV.on) api("add-student", {student: name}).catch(() => {});
   return true;
@@ -2414,7 +2438,7 @@ function quizHub(){
 }
 function statsHTML(){
   if(!student) return `<div class="card qz-stats empty-ish"><p>Thêm tên học sinh ở trên để lưu và xem kết quả làm bài.</p></div>`;
-  if(!isOwn(student)) return `<div class="card qz-stats qz-lock"><h2 class="qz-h">Kết quả của ${esc(student)}</h2><p class="qz-muted">${QI.user}Kết quả và chi tiết bài làm chỉ hiện cho chính bạn <b>${esc(student)}</b> trên thiết bị đã làm bài. Bạn có thể chọn tên khác hoặc <b>Thêm tên</b> của mình để bắt đầu làm bài.</p></div>`;
+  if(!isOwn(student)) return `<div class="card qz-stats qz-lock"><h2 class="qz-h">Kết quả của ${esc(student)}</h2><div class="qz-lock-b"><span class="qz-lock-i" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15.5" r="1" fill="currentColor"/></svg></span><p class="qz-muted">Kết quả và chi tiết bài làm chỉ hiện cho chính bạn <b>${esc(student)}</b> trên thiết bị đã làm bài. Bạn có thể chọn tên khác, hoặc bấm <b>Thêm tên</b> để bắt đầu làm bài của mình.</p></div>${SRV.on && SRV.pin ? `<div style="margin-top:12px"><button class="btn btn-sm btn-p" data-act="qz-unlock">Nhập mã PIN của ${esc(student)}</button></div>` : ""}</div>`;
   const rs = myRes();
   if(!rs.length) return `<div class="card qz-stats"><h2 class="qz-h">Kết quả của ${esc(student)}</h2>${saveNote()}<p class="qz-muted">Chưa làm bài nào. Chọn một bài bên dưới để bắt đầu nhé!</p></div>`;
   const n = rs.reduce((a, r) => a + r.n, 0), ok = rs.reduce((a, r) => a + r.ok, 0), sec = rs.reduce((a, r) => a + r.sec, 0);
@@ -2433,7 +2457,8 @@ function statsHTML(){
 }
 function saveNote(){
   const pend = SRV.queue.filter(x => x.student === student).length;
-  return `<p class="qz-save ${SRV.on ? "srv" : ""}">${SRV.on ? `Kết quả được lưu trên hosting, xem được từ mọi máy.${pend ? ` Còn ${pend} kết quả chờ gửi.` : ""}` : "Kết quả được lưu trên máy này."}</p>`;
+  const needPin = SRV.on && SRV.pin && student && !pins[student];
+  return `<p class="qz-save ${SRV.on ? "srv" : ""}">${SRV.on ? `Kết quả được lưu trên hosting.${pend ? ` Còn ${pend} kết quả chờ gửi.` : ""}${needPin ? ` Tên này chưa có mã PIN: <button class="btn btn-sm btn-g" data-act="qz-unlock">Đặt mã PIN</button> để xem ở máy khác.` : " Xem lại ở máy khác bằng tên và mã PIN."}` : "Kết quả được lưu trên máy này."}</p>`;
 }
 function quizSetup(p){
   const pool = quizOf(p.id), b = bestOf(p.id), m = menuById(p.menu);
@@ -2518,7 +2543,7 @@ function afterQuiz(){
     if(window.matchMedia && matchMedia("(pointer:fine)").matches) inp.focus(); }
   const f1 = $("#qz-one"), f2 = $("#qz-mix");
   const readSetup = f => { const n = +(f.querySelector('[name="qn"]:checked') || {}).value || 10, lim = +(f.querySelector('[name="qt"]:checked') || {}).value || 0; qzPref.n = n; qzPref.lim = lim; store.set(QZ_PREF, qzPref); return {n, lim}; };
-  const needName = async () => { if(student) return true; return await addStudent(); };
+  const needName = async () => { if(!student) return await addStudent(); if(!isOwn(student) && SRV.on && SRV.pin) return await unlockName(student); return true; };
   if(f1) f1.addEventListener("submit", async e => { e.preventDefault(); const s = readSetup(f1); if(!(await needName())) return; const p = postById(f1.dataset.id);
     startQuiz(p.id, p.title, quizOf(p.id).map(q => ({q})), s.n, s.lim, "bai-tap/" + p.id); });
   if(f2){
@@ -2533,6 +2558,7 @@ async function quizAction(a, t){
   const repaint = () => { render(); };
   switch(a){
     case "qz-stu": student = t.dataset.name; saveStudents(); render(); if(SRV.on){ await pullMine(); quizRefresh(); } break;
+    case "qz-unlock": if(student && await unlockName(student)){ render(); quizRefresh(); } break;
     case "qz-stu-add": if(await addStudent()) render(); break;
     case "qz-pick": if(it){ it.pick = +t.dataset.k; repaint(); } break;
     case "qz-chip": if(it){ it.chosen.push(+t.dataset.k); repaint(); } break;
@@ -2657,7 +2683,7 @@ function resultsAdmin(){
   if(sel){
     const rs = all.filter(r => r.s === sel).sort((a, b) => b.at - a.at);
     const best = {}; for(const r of rs){ const p = pctOf(r); if(!best[r.title] || best[r.title] < p) best[r.title] = p; }
-    detail = `<div class="card panel"><div class="qe-head"><h2 class="sub-h" style="margin:0">${esc(sel)}</h2><div class="qz-stats-a"><button class="btn btn-sm btn-d" data-act="res-del" data-name="${esc(sel)}">${I.trash}Xóa kết quả</button><button class="btn btn-sm btn-g" data-act="res-close">Đóng</button></div></div>
+    detail = `<div class="card panel"><div class="qe-head"><h2 class="sub-h" style="margin:0">${esc(sel)}</h2><div class="qz-stats-a">${D0.local ? "" : `<button class="btn btn-sm btn-g" data-act="res-pin" data-name="${esc(sel)}">Đặt lại PIN</button>`}<button class="btn btn-sm btn-d" data-act="res-del" data-name="${esc(sel)}">${I.trash}Xóa kết quả</button><button class="btn btn-sm btn-g" data-act="res-close">Đóng</button></div></div>
       <h3 class="qz-h3">Điểm cao nhất theo bài</h3><div class="qz-weak">${Object.entries(best).sort((a, b) => a[1] - b[1]).map(([t, p]) => `<span class="res-chip">${esc(t)} ${badge(p)}</span>`).join("") || "<span class='qz-muted'>Chưa có.</span>"}</div>
       <h3 class="qz-h3">Tất cả các lần làm (${rs.length})</h3>
       <div class="table-wrap"><table class="qz-hist"><thead><tr><th>Thời điểm</th><th>Bài</th><th>Điểm</th><th>Thời gian</th></tr></thead><tbody>
@@ -2684,6 +2710,8 @@ function afterResultsAdmin(){
 async function resultsAction(a, t){
   switch(a){
     case "res-open": ui.resStudent = t.dataset.name; render(); return true;
+    case "res-pin": { if(!(await dialog({title: `Đặt lại PIN của ${t.dataset.name}?`, text: "PIN cũ bị xóa. Lần đăng nhập kế tiếp, cháu (hoặc người nhập đầu tiên) sẽ đặt PIN mới.", ok: "Đặt lại"}))) return true;
+      try{ await api("reset-pin", {pw: adminPw, student: t.dataset.name}); delete pins[t.dataset.name]; store.set(QZ_PIN, pins); toast("Đã xóa PIN, cháu đặt lại ở lần vào kế tiếp."); }catch(e){ toast(e.message || "Chưa đặt lại được."); } return true; }
     case "res-close": ui.resStudent = null; render(); return true;
     case "res-reload": if(adminPw) await loadServerResults(adminPw); else { ui.resData = null; render(); } toast("Đã tải lại kết quả."); return true;
     case "res-export": { const rows = resRows().results; const tmp = results; exportRows(rows); return true; }
