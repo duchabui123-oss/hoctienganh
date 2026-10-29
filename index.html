@@ -986,9 +986,10 @@ function dialog({title, text = "", ok = "Đồng ý", cancel = "Hủy", danger =
     const back = document.createElement("div"); back.className = "dlg-back";
     back.innerHTML = `<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="dlg-t"><h2 id="dlg-t">${esc(title)}</h2>${text ? `<p>${text}</p>` : ""}
       ${(fields || []).map((f, i) => `<div class="fld"><label for="dlg-f${i}">${esc(f.label)}</label>${f.type === "select"
-        ? `<select class="sel" id="dlg-f${i}">${f.options}</select>` : `<input class="inp" id="dlg-f${i}" type="${f.type || "text"}" value="${esc(f.value || "")}" ${f.min != null ? `min="${f.min}" max="${f.max}"` : ""} placeholder="${esc(f.ph || "")}">`}</div>`).join("")}
+        ? `<select class="sel" id="dlg-f${i}">${f.options}</select>` : `<input class="inp" id="dlg-f${i}" type="${f.type || "text"}" value="${esc(f.value || "")}" ${f.min != null ? `min="${f.min}" max="${f.max}"` : ""} placeholder="${esc(f.ph || "")}" ${f.pin ? 'inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off"' : ""}>`}</div>`).join("")}
       <div class="acts">${cancel ? `<button class="btn btn-g" data-r="0">${esc(cancel)}</button>` : ""}<button class="btn ${danger ? "btn-d" : "btn-p"}" data-r="1">${esc(ok)}</button></div></div>`;
     document.body.appendChild(back);
+    back.querySelectorAll("input[maxlength='4'][inputmode='numeric']").forEach(i => i.addEventListener("input", () => { i.value = i.value.replace(/\D/g, "").slice(0, 4); }));
     const first = back.querySelector("input,select") || back.querySelector('[data-r="1"]'); first.focus();
     const done = r => { const vals = (fields || []).map((f, i) => back.querySelector("#dlg-f" + i).value); back.remove(); res(fields ? (r ? vals : null) : r); };
     back.addEventListener("click", e => { const b = e.target.closest("[data-r]"); if(b) done(b.dataset.r === "1"); else if(e.target === back) done(false); });
@@ -2287,13 +2288,13 @@ async function srvLogin(name, pin){
 }
 async function unlockName(name){
   const own = isOwn(name);
-  const v = await dialog({title: own ? `Đặt mã PIN cho ${name}` : `Nhập mã PIN của ${name}`, text: own ? "PIN 4 số giúp bạn xem lại kết quả ở máy hoặc trình duyệt khác. Hãy nhớ mã này nhé." : "Nhập mã PIN 4 số bạn đã đặt khi tạo tên này.", fields: [{label: "Mã PIN (4 chữ số)", type: "password", ph: "••••"}], ok: own ? "Đặt PIN" : "Xem kết quả"});
+  const v = await dialog({title: own ? `Đặt mã PIN cho ${name}` : `Nhập mã PIN của ${name}`, text: own ? "PIN 4 số giúp bạn xem lại kết quả ở máy hoặc trình duyệt khác. Hãy nhớ mã này nhé." : "Nhập mã PIN 4 số bạn đã đặt khi tạo tên này.", fields: [{label: "Mã PIN (4 chữ số)", type: "password", pin: true, ph: "••••"}], ok: own ? "Đặt PIN" : "Xem kết quả"});
   if(!v) return false; const pin = v[0].trim(); if(!validPin(pin)){ toast("Mã PIN gồm đúng 4 chữ số."); return false; }
   const j = await srvLogin(name, pin); if(!j) return false; saveStudents(); toast(j.created ? "Đã đặt mã PIN." : "Đã mở kết quả của " + name + "."); return true;
 }
 async function addStudent(){
   const pinOn = SRV.on && SRV.pin;
-  const v = await dialog({title: "Thêm tên học sinh", text: pinOn ? "Mỗi cháu một tên và một mã PIN 4 số. Có PIN, cháu xem lại được kết quả ở máy hay trình duyệt khác. Tên đã có thì nhập đúng PIN để vào lại." : "Mỗi cháu một tên để thống kê kết quả riêng.", fields: [{label: "Tên", ph: "Ví dụ: Bin, Na, Minh Anh"}].concat(pinOn ? [{label: "Mã PIN (4 chữ số)", type: "password", ph: "••••"}] : []), ok: "Thêm"});
+  const v = await dialog({title: "Thêm tên học sinh", text: pinOn ? "Mỗi bạn một tên và một mã PIN 4 số. Mã PIN để xem lại kết quả ở máy tính hay trình duyệt khác hoặc tiếp tục làm bài với tên của mình." : "Mỗi cháu một tên để thống kê kết quả riêng.", fields: [{label: "Tên", ph: "Ví dụ: Bin, Na, Minh Anh"}].concat(pinOn ? [{label: "Mã PIN (4 chữ số)", type: "password", pin: true, ph: "••••"}] : []), ok: "Thêm"});
   if(!v) return false; const name = v[0].trim().slice(0, 24); if(!name) return false;
   if(pinOn){ const pin = (v[1] || "").trim(); if(!validPin(pin)){ toast("Mã PIN gồm đúng 4 chữ số."); return false; }
     const j = await srvLogin(name, pin); if(!j) return false; student = name; saveStudents(); return true; }
