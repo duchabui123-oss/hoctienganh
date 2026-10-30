@@ -849,6 +849,27 @@ const PAGE_TOP = "<title>Tiếng Anh không khó<\/title><meta name=\"robots\" c
 const AUTH_KEY = "tanm-auth-v1", FAIL_KEY = "tanm-fail-v1";
 const DRAFT_KEY = "tanm-draft-v1", LEARN_KEY = "tanm-learned-v1", LAST_KEY = "tanm-last-v1", FS_KEY = "tanm-fs-v1";
 
+/* ===== chống xem mã nguồn (chỉ ngăn người dùng thông thường; vẫn cho bôi đen, sao chép, dịch) ===== */
+const PROTECT_SOURCE = true; /* đổi thành false nếu cần mở lại để chỉnh sửa */
+if (PROTECT_SOURCE) {
+  const editable = t => t && t.closest && t.closest("input,textarea,select,[contenteditable='true']");
+  /* chuột phải: chỉ cho mở menu khi đang bôi đen chữ (để Sao chép / Dịch) hoặc trong ô nhập liệu */
+  document.addEventListener("contextmenu", e => {
+    const sel = window.getSelection && String(window.getSelection());
+    if (editable(e.target) || (sel && sel.trim())) return;
+    e.preventDefault();
+  });
+  /* chặn phím tắt xem mã nguồn / công cụ nhà phát triển; không chặn Ctrl+C, Ctrl+A, Ctrl+F... */
+  document.addEventListener("keydown", e => {
+    const k = (e.key || "").toLowerCase(), ctrl = e.ctrlKey || e.metaKey;
+    if (k === "f12" || (ctrl && k === "u") || (ctrl && e.shiftKey && ["i", "j", "c"].includes(k)) || (e.metaKey && e.altKey && ["i", "j", "u", "c"].includes(k))) {
+      e.preventDefault(); e.stopPropagation();
+    }
+  }, true);
+  /* chặn kéo thả hình/liên kết ra ngoài */
+  document.addEventListener("dragstart", e => { if (!editable(e.target)) e.preventDefault(); });
+}
+
 /* ===== helpers ===== */
 const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
