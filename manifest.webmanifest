@@ -1,4 +1,5 @@
 {
+ "id": "./",
  "name": "Tiếng Anh không khó",
  "short_name": "Tiếng Anh",
  "description": "Mỗi ngày một bài nhỏ. Luyện mãi thành tài, miệt mài tất giỏi!",
@@ -25,6 +26,29 @@
    "sizes": "512x512",
    "type": "image/png",
    "purpose": "maskable"
+  }
+ ],
+ "screenshots": [
+  {
+   "src": "screenshots/home-phone.png",
+   "sizes": "780x1688",
+   "type": "image/png",
+   "form_factor": "narrow",
+   "label": "Trang chủ trên điện thoại"
+  },
+  {
+   "src": "screenshots/test-phone.png",
+   "sizes": "780x1688",
+   "type": "image/png",
+   "form_factor": "narrow",
+   "label": "Bài kiểm tra trình độ"
+  },
+  {
+   "src": "screenshots/home-wide.png",
+   "sizes": "1280x800",
+   "type": "image/png",
+   "form_factor": "wide",
+   "label": "Trang chủ trên máy tính"
   }
  ]
 }
