@@ -1,6 +1,8 @@
-/* Tiếng Anh Nhà Mình – offline support. Lessons open without internet after the first visit;
-   when online, the newest index.html on the hosting is always fetched first. */
-const CACHE = "tanm-app-v2";
+/* Tiếng Anh không khó – offline support and fast start.
+   The page opens at once from the saved copy; the newest index.html is fetched in the background and,
+   when it is a new release, the page shows a "new version" bar. Lesson edits come from Google Sheets,
+   so index.html itself only changes when the site gets new features. */
+const CACHE = "tanm-app-v3";
 const CORE = ["./", "index.html", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => Promise.all(CORE.map(u => c.add(u).catch(() => {})))).then(() => self.skipWaiting()));
@@ -14,11 +16,20 @@ self.addEventListener("fetch", e => {
   if(/\/(api\.php|config\.json)$/.test(url.pathname)) return;          // exercise results always go straight to the hosting
   const page = r.mode === "navigate" || (url.origin === location.origin && /(\/|\.html)$/.test(url.pathname));
   if(page){
-    // network first: new content uploaded to the hosting shows up right away
-    e.respondWith(fetch(r, {cache: "no-store"}).then(res => {
-      if(res.ok){ const cp = res.clone(); caches.open(CACHE).then(c => c.put("index.html", cp)); }
-      return res;
-    }).catch(() => caches.match("index.html").then(m => m || caches.match("./"))));
+    const cacheP = caches.open(CACHE), hitP = cacheP.then(c => c.match("index.html"));
+    const net = fetch(r.url.split("#")[0], {cache: "no-store"});
+    const update = Promise.all([cacheP, hitP, net]).then(async ([c, hit, res]) => {
+      if(!res.ok) return;
+      const rel = t => (t.match(/"release":\s*\{"v":\s*"([^"]+)"/) || [])[1] || "";
+      const [text, old] = await Promise.all([res.clone().text(), hit ? hit.clone().text() : ""]);
+      await c.put("index.html", res.clone());
+      if(hit && rel(text) && rel(text) !== rel(old)){                  // a new release was uploaded: tell the open page
+        const tell = async () => (await self.clients.matchAll({type: "window", includeUncontrolled: true})).forEach(x => x.postMessage({type: "new-version", v: rel(text)}));
+        await tell(); await new Promise(ok => setTimeout(ok, 3000)); await tell();
+      }
+    }).catch(() => {});
+    e.waitUntil(update);
+    e.respondWith(hitP.then(hit => hit ? hit.clone() : net.then(res => res.clone()).catch(() => caches.match("./"))));   // instant start from the saved copy
     return;
   }
   if(/fonts\.(googleapis|gstatic)\.com$/.test(url.hostname) || url.origin === location.origin){
