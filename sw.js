@@ -2,7 +2,7 @@
    The page opens at once from the saved copy; the newest index.html is fetched in the background and,
    when it is a new release, the page shows a "new version" bar. Lesson edits come from Google Sheets,
    so index.html itself only changes when the site gets new features. */
-const CACHE = "tanm-app-v4";
+const CACHE = "tanm-app-v5";
 const CORE = ["./", "index.html", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => Promise.all(CORE.map(u => c.add(u).catch(() => {})))).then(() => self.skipWaiting()));
@@ -14,7 +14,8 @@ self.addEventListener("fetch", e => {
   const r = e.request; if(r.method !== "GET") return;
   const url = new URL(r.url);
   if(/\/(api\.php|config\.json)$/.test(url.pathname)) return;          // exercise results always go straight to the hosting
-  const page = r.mode === "navigate" || (url.origin === location.origin && /(\/|\.html)$/.test(url.pathname));
+  if(url.origin === location.origin && url.pathname.startsWith("/bai/")) return;   // trang bài tĩnh (SEO): luôn lấy từ mạng
+  const page = url.origin === location.origin && /\/(index\.html)?$/.test(url.pathname);
   if(page){
     const cacheP = caches.open(CACHE), hitP = cacheP.then(c => c.match("index.html"));
     const net = fetch(r.url.split("#")[0], {cache: "no-store"});

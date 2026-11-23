@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /api.php
+
+Sitemap: https://tienganhkhongkho.com/sitemap.xml
