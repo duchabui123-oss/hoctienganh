@@ -114,9 +114,15 @@ def page(x, all_ls, data, mark, fonts, icon_tag, css_href):
         tgt = m.group(2)
         if tgt in by_id: return m.group(1) + '/bai/' + by_id[tgt]['slug'] + '.html"'
         if tgt and ('id="' + tgt + '"') in p['html']: return m.group(0)   # neo trong bài
+        if re.fullmatch(r'cd-\d+', tgt or ''): return m.group(0)       # mục lục: mục thứ N (thẻ h2 thứ N)
         if tgt: return m.group(1) + '/#' + tgt + '"'
         return m.group(0)
     body = re.sub(r'(href=")#([\w-]*)"', fix, p['html'])
+    n = [0]
+    def h2id(m):
+        n[0] += 1
+        return m.group(0) if 'id=' in m.group(1) else '<h2 id="cd-' + str(n[0]) + '"' + m.group(1) + '>'
+    body = re.sub(r'<h2\b([^>]*)>', h2id, body)
     def wrap(m):
         pre = body[max(0, m.start() - 40):m.start()]
         return m.group(0) if pre.endswith('<div class="table-wrap">') else '<div class="table-wrap">' + m.group(0) + '</div>'
@@ -220,6 +226,18 @@ def main():
             print('Đã gộp nội dung đã xuất bản, bản', j.get('rev'))
     except Exception as e:
         print('Không lấy được nội dung đã xuất bản, dùng nội dung trong index.html:', e)
+    # rà liên kết trong bài (kể cả bài sửa trên trang Quản trị): in ra nhật ký của GitHub Actions
+    posts = {p['id'] for p in data['posts']}; menus = {m['id'] for m in data['menus']}
+    special = {'bai-tap', 'luyen-noi', 'phieu-luu', 'quan-tri', 'quyen-rieng-tu', 'so-tu', 'thach-dau', 'thi-thu', 'thu-vien', 'trang-chu', 'vui-choi'}
+    broken = []
+    for p in data['posts']:
+        ids = set(re.findall(r'\bid="([^"]+)"', p['html']))
+        for tgt in re.findall(r'href="#([^"]*)"', p['html']):
+            if not tgt or tgt in posts or tgt in menus or tgt in special or tgt in ids or re.fullmatch(r'cd-\d+', tgt) \
+               or tgt.startswith(('bai-tap/', 'thach-dau/', 'thi-thu/', 'unit/', 'vui-choi/')): continue
+            broken.append(p['title'] + ' -> #' + tgt)
+    print('Liên kết hỏng trong bài:', len(broken))
+    for b in broken[:50]: print('  ', b)
     os.makedirs('dist', exist_ok=True)
     ls = write_all(data, MARK, fonts, icon, css, datetime.date.today().isoformat())
     for f in os.listdir('dist'):   # chép ra gốc trang
