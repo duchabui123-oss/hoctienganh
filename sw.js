@@ -2,7 +2,7 @@
    The page opens at once from the saved copy; the newest index.html is fetched in the background and,
    when it is a new release, the page shows a "new version" bar. Lesson edits come from Google Sheets,
    so index.html itself only changes when the site gets new features. */
-const CACHE = "tanm-app-v3";
+const CACHE = "tanm-app-v4";
 const CORE = ["./", "index.html", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => Promise.all(CORE.map(u => c.add(u).catch(() => {})))).then(() => self.skipWaiting()));
